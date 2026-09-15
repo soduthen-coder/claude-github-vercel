@@ -1,0 +1,11 @@
+# 내 계정 정보 — 컴퓨터마다 다르므로 올리지 않습니다
+config.sh
+# 스크립트가 만드는 임시 파일
+.out_*.txt
+.err_*.txt
+.lock_*.json
+# 운영체제·편집기 잡파일
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
