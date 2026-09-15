@@ -167,13 +167,20 @@ case "$SEEN" in
   *)       STATE="공개 (주소를 아는 누구나 열 수 있습니다)" ;;
 esac
 
+# 저장소 주소는 짐작하지 말고 실제로 연결된 곳에서 읽습니다.
+#   --name 을 줘도 이미 연결된 origin 이 있으면 push 는 그쪽으로 갑니다.
+#   그런데 화면에는 --name 을 찍고 있어서, 엉뚱한 저장소를 올린 것처럼
+#   보이는 일이 있었습니다.
+REPO_URL="$(git remote get-url origin 2>/dev/null | sed 's#\.git$##')" || REPO_URL=""
+REPO_VIS="$("$GH" api "/repos/$GH_OWNER/$(basename "${REPO_URL:-x}")" --jq .visibility 2>/dev/null)" || REPO_VIS=""
+
 say ""
 say "────────────────────────────────────────────"
 say "  올렸습니다"
 say ""
 say "  주소    $SITE"
 say "  상태    $STATE"
-say "  저장소  https://github.com/$GH_OWNER/$NAME  (${VIS#--})"
+say "  저장소  ${REPO_URL:-(없음)}${REPO_VIS:+  ($REPO_VIS)}"
 say "────────────────────────────────────────────"
 say ""
 say "  고친 뒤 다시 올리기   bash ship.sh"

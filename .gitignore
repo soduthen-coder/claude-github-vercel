@@ -9,3 +9,5 @@ config.sh
 Thumbs.db
 .vscode/
 .idea/
+
+.vercel
