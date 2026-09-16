@@ -53,7 +53,14 @@ fi
 say ""
 say "지울 것"
 say "────────────────────────────────────────────"
-[ "$KEEP_REPO" -eq 0 ] && say "  저장소  ${REPO_INFO:-(없음)}" || say "  저장소  건너뜀"
+# ※ A && B || C 로 쓰면 안 됩니다 ※
+#   if-then-else 처럼 보이지만, A 가 참인데 B 가 실패하면 C 까지 실행됩니다.
+#   "저장소 이름" 과 "건너뜀" 이 한꺼번에 찍히는 일이 생길 수 있습니다.
+if [ "$KEEP_REPO" -eq 0 ]; then
+  say "  저장소  ${REPO_INFO:-(없음)}"
+else
+  say "  저장소  건너뜀"
+fi
 say "  웹사이트  ${SITE_BEFORE:-(없음)}"
 if [ "$KEEP_LOCAL" -eq 0 ] && [ -n "$LOCAL" ]; then say "  폴더    $LOCAL"; else say "  폴더    건너뜀"; fi
 say "────────────────────────────────────────────"

@@ -154,6 +154,11 @@ bash <도구>/down.sh <이름> --yes    # 2) 사용자가 그렇게 하겠다고
 | 지운 직후 확인이 "살아 있음" | 버셀 전파가 확인보다 느림 | 404 나올 때까지 재시도 |
 | 남의 사이트 상태를 내 것처럼 보고 | 주소를 `<이름>.vercel.app` 으로 추측 | 추측하지 않고 버셀이 준 주소만 사용 |
 | `.cmd` 파일이 한글 줄을 명령으로 실행 | cmd.exe 가 UTF-8 을 못 읽음 | `.cmd` 는 ASCII 로만 작성 |
+| `The "--name" option is deprecated` 경고 | 버셀이 `deploy --name` 을 걷어내는 중 | `project add` + `deploy --project` 2단계 |
+| `project_not_found` 로 첫 배포 실패 | `--name` 은 없는 프로젝트를 만들지만 `--project` 는 **있는 것만 가리킴** | 배포 전에 `vercel project add` 로 자리를 먼저 만든다 (이미 있어도 성공) |
+| 두 번째 실행에서 `.vercel` 이 커밋됨 | `.gitignore` 가 **이미 있으면** 안 건드려서 `.vercel/` 이 빠짐 | 있으면 빠진 줄만 덧붙인다 |
+| push 실패인데 아무 메시지 없이 창만 닫힘 | `git push \|\| git push -u` 가 둘 다 실패 → `set -e` 가 조용히 종료 | 실패 내용을 받아 두고 `die` 로 안내 |
+| 맥에서 `bash\r: No such file or directory` | 윈도우 git 이 체크아웃할 때 CRLF 로 바꿈 | `.gitattributes` 에 `*.sh text eol=lf` |
 
 ## 버셀 깃 연동을 쓰지 않는 이유
 

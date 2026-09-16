@@ -46,7 +46,20 @@ cd "$DIR" 2>/dev/null || die "폴더를 찾을 수 없습니다: $DIR"
 DIR="$PWD"
 
 # 올릴 것이 있는지 봅니다. 빈 폴더를 올리면 빈 사이트가 나옵니다.
-if [ -z "$(ls -A . 2>/dev/null | grep -v '^\.git$' | head -1)" ]; then
+#   .git 과 .gitignore 만 있는 폴더도 "없음" 으로 봅니다. 그 둘은 도구가
+#   만든 것이라 올릴 내용이 아닙니다.
+#   ※ ls | grep 으로 세지 않습니다 ※ 이름에 줄바꿈이 든 파일이 있으면
+#     개수가 어긋납니다. 글로브로 직접 훑습니다.
+HAS_CONTENT=0
+shopt -s nullglob dotglob
+for _f in ./*; do
+  case "$(basename "$_f")" in
+    .git|.gitignore) continue ;;
+    *) HAS_CONTENT=1; break ;;
+  esac
+done
+shopt -u nullglob dotglob
+if [ "$HAS_CONTENT" -eq 0 ]; then
   die "이 폴더에 올릴 파일이 없습니다: $DIR
   먼저 클로드에게 무언가 만들어 달라고 한 뒤에 올려 주세요."
 fi
@@ -86,23 +99,48 @@ fi
 
 # ── 3. 비밀 파일 걸러내기 ─────────────────────────────────────────────────
 #     한 번 올라간 것은 지워도 커밋 기록에 남습니다. 올리기 전에 막습니다.
-if [ ! -f .gitignore ]; then
-  cat > .gitignore <<'IGN'
-# 열쇠·비밀 파일 — 올라가면 지워도 기록에 남습니다
-.env
-.env.*
-*.pem
-*.key
-# 도구가 만드는 로컬 설정 (토큰이 들어 있습니다)
-.vercel/
-# 운영체제·편집기 잡파일
-.DS_Store
-Thumbs.db
-.vscode/
-.idea/
-node_modules/
-IGN
-  step ".gitignore 를 만들어 비밀 파일을 걸러냈습니다"
+#
+#     ※ 파일이 "없을 때만" 만들면 안 됩니다 ※
+#       예전에는 .gitignore 가 없을 때만 새로 썼습니다. 그런데 클로드가
+#       만들어 준 폴더에는 .gitignore 가 이미 있는 경우가 흔하고, 그 안에
+#       .vercel/ 은 거의 없습니다. 그러면 첫 배포가 만든 .vercel 폴더가
+#       두 번째 실행에서 그대로 커밋되어 올라갑니다.
+#       그래서 있으면 빠진 줄만 덧붙입니다.
+#
+#     .vercel 에 든 것은 projectId·orgId·projectName 입니다. 비밀번호나
+#     토큰은 없습니다. 그래도 올리지 않습니다. 컴퓨터마다 달라야 하는
+#     연결 정보라서, 올라가면 남이 받아 쓸 때 엉뚱한 프로젝트를 가리킵니다.
+#     목록은 여기 한 곳에만 둡니다. 새로 만들 때와 덧붙일 때가 서로
+#     어긋나지 않게 하기 위해서입니다.
+IGNORE_LINES=(
+  ".env" ".env.*" "*.pem" "*.key"   # 열쇠·비밀 파일
+  ".vercel/"                        # 버셀 연결 정보 (컴퓨터마다 달라야 함)
+  ".DS_Store" "Thumbs.db" ".vscode/" ".idea/" "node_modules/"
+)
+
+[ -f .gitignore ] || : > .gitignore   # 없으면 빈 파일로 시작
+
+MISSING=()
+for L in "${IGNORE_LINES[@]}"; do
+  # -F 고정 문자열, -x 한 줄 전체 일치 — "*.key" 를 정규식으로 읽지 않게.
+  grep -qxF "$L" .gitignore || MISSING+=("$L")
+done
+
+if [ "${#MISSING[@]}" -gt 0 ]; then
+  # 이미 있던 내용은 건드리지 않고 뒤에만 덧붙입니다.
+  [ -s .gitignore ] && printf '\n' >> .gitignore
+  printf '# 올리면 안 되는 것 (배포 도구가 넣었습니다)\n' >> .gitignore
+  printf '%s\n' "${MISSING[@]}" >> .gitignore
+  step "비밀 파일을 걸러냈습니다 (.gitignore 항목 ${#MISSING[@]}개)"
+fi
+
+# 이전 실행에서 이미 .vercel 이 올라가 버렸다면 추적을 끊습니다.
+# (파일은 남기고 깃에서만 뺍니다. 안 하면 계속 따라 올라갑니다.)
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  if git ls-files --error-unmatch .vercel >/dev/null 2>&1; then
+    git rm -r --cached .vercel >/dev/null 2>&1 || true
+    step "예전에 올라간 .vercel 을 깃 추적에서 뺐습니다"
+  fi
 fi
 
 # ── 4. 깃허브에 올리기 ────────────────────────────────────────────────────
@@ -125,7 +163,20 @@ fi
 
 if git remote get-url origin >/dev/null 2>&1; then
   step "깃허브에 올리는 중..."
-  git push -q 2>/dev/null || git push -q -u origin main
+  # 첫 push 는 -u(추적 설정)가 없어서 실패할 수 있으므로 그때만 다시 시도합니다.
+  # ※ 둘 다 실패하면 set -e 가 메시지 없이 스크립트를 끝냅니다. 사용자는
+  #   "올렸습니다" 도 "실패했습니다" 도 못 보고 창만 닫히게 됩니다.
+  #   그래서 실패 내용을 받아 두고 직접 안내합니다.
+  if ! PUSH_ERR="$(git push 2>&1)"; then
+    if ! PUSH_ERR="$(git push -u origin main 2>&1)"; then
+      say ""
+      say "깃허브가 거절한 내용:"
+      printf '%s\n' "$PUSH_ERR" | tail -6
+      die "깃허브에 올리지 못했습니다.
+  같은 저장소를 다른 곳에서도 고쳤다면 먼저 받아와야 합니다:  git pull --rebase
+  로그인이 풀렸다면:  $GH auth login"
+    fi
+  fi
 else
   step "깃허브 저장소를 만드는 중... (${VIS#--})"
   "$GH" repo create "$NAME" $VIS --source=. --remote=origin --push >/dev/null 2>&1 \
@@ -137,10 +188,27 @@ fi
 # ── 5. 버셀에 배포 ────────────────────────────────────────────────────────
 #     깃 연동을 걸지 않고 여기서 바로 올립니다. 연동을 쓰려면 버셀 깃허브 앱에
 #     저장소 접근 권한을 사람이 직접 켜야 해서, 새 저장소마다 막힙니다.
+#
+#     ※ --name 이 아니라 project add + --project 두 단계입니다 ※
+#       예전에는 `deploy --name 이름` 한 줄이었습니다. 그런데 버셀이 --name
+#       을 걷어내는 중이라 실행할 때마다 'The "--name" option is deprecated'
+#       경고가 사용자 화면에 찍혔고, 도움말 목록에서도 이미 빠졌습니다.
+#
+#       대체인 --project 로 그냥 바꾸면 안 됩니다. --name 은 없는 프로젝트를
+#       만들어 줬지만 --project 는 이미 있는 것만 가리킵니다. 바꿔서 돌려보니
+#       첫 배포가 project_not_found 로 실패했습니다.
+#       그래서 project add 로 먼저 만들고 나서 --project 로 배포합니다.
+#       project add 는 이미 있어도 성공하므로(멱등) 두 번째 실행에도 안전합니다.
 step "인터넷에 올리는 중..."
 OUT="$TOOLS/.out_$$.txt"; ERR="$TOOLS/.err_$$.txt"
 trap 'rm -f "$OUT" "$ERR"' EXIT
-if ! vc deploy --prod --yes --name "$NAME" >"$OUT" 2>"$ERR"; then
+
+# 프로젝트 자리를 먼저 만듭니다. 이미 있으면 그대로 넘어갑니다.
+vc project add "$NAME" >/dev/null 2>&1 \
+  || die "버셀에 프로젝트 자리를 만들지 못했습니다: $NAME
+  이름이 버셀 규칙에 맞는지 확인해 주세요 (영소문자·숫자·하이픈)."
+
+if ! vc deploy --prod --yes --project "$NAME" >"$OUT" 2>"$ERR"; then
   say ""
   say "배포 실패:"
   tail -6 "$ERR"

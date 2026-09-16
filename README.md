@@ -41,3 +41,8 @@ https://github.com/soduthen-coder/claude-github-vercel
 `ship.sh` 올리기 · `lock.sh` 잠금/공개 · `down.sh` 내리기.
 동작 방식과 만들면서 부딪힌 함정들은 각 스크립트 주석과
 [`CLAUDE.md`](CLAUDE.md) 에 적어 두었습니다.
+
+이 저장소가 배포 도구의 **확정판**입니다.
+전에 따로 있던 `github-vercel-onetouch` 는 여기로 합쳐졌습니다. 그쪽은
+빈 사이트를 처음부터 만들어 주는 기능이 있었지만, 클로드에게 만들어 달라고
+하면 될 일이라 덜어냈습니다. 흐름은 하나입니다 — **만들게 한 뒤 올린다.**
